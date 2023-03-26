@@ -8,9 +8,13 @@ from torch.autograd import Variable
 import numpy as np
 
 # Scipy to resize images
-from scipy.misc import imresize
+# from scipy.misc import imresize
+from skimage.transform import resize
 
 # Keras for easy data augmentation
+# from keras.preprocessing.image import ImageDataGenerator
+import tensorflow
+
 from keras.preprocessing.image import ImageDataGenerator
 
 
@@ -113,7 +117,7 @@ class mcdnn(nn.Module):
     in_resized = []
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
-      in_resized.append(imresize(temp,(20,20)).astype(float)/255)
+      in_resized.append(resize(temp,(20,20)).astype(float)/255)
     in_resized = np.reshape(np.asarray(in_resized), (100,1,20,20))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
    
@@ -129,7 +133,7 @@ class mcdnn(nn.Module):
     in_resized = []
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
-      in_resized.append(imresize(temp,(18,18)).astype(float)/255)
+      in_resized.append(resize(temp,(18,18)).astype(float)/255)
     in_resized = np.reshape(np.asarray(in_resized), (100,1,18,18))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
@@ -145,7 +149,7 @@ class mcdnn(nn.Module):
     in_resized = []
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
-      in_resized.append(imresize(temp,(16,16)).astype(float)/255)
+      in_resized.append(resize(temp,(16,16)).astype(float)/255)
     in_resized = np.reshape(np.asarray(in_resized), (100,1,16,16))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
@@ -161,7 +165,7 @@ class mcdnn(nn.Module):
     in_resized = []
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
-      in_resized.append(imresize(temp,(14,14)).astype(float)/255)
+      in_resized.append(resize(temp,(14,14)).astype(float)/255)
     in_resized = np.reshape(np.asarray(in_resized), (100,1,14,14))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
@@ -177,7 +181,7 @@ class mcdnn(nn.Module):
     in_resized = []
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
-      in_resized.append(imresize(temp,(12,12)).astype(float)/255)
+      in_resized.append(resize(temp,(12,12)).astype(float)/255)
     in_resized = np.reshape(np.asarray(in_resized), (100,1,12,12))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
@@ -193,7 +197,7 @@ class mcdnn(nn.Module):
     in_resized = []
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
-      in_resized.append(imresize(temp,(10,10)).astype(float)/255)
+      in_resized.append(resize(temp,(10,10)).astype(float)/255)
     in_resized = np.reshape(np.asarray(in_resized), (100,1,10,10))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
@@ -209,7 +213,7 @@ class mcdnn(nn.Module):
     in_resized = []
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
-      in_resized.append(imresize(temp,(50,50)).astype(float)/255)
+      in_resized.append(resize(temp,(50,50)).astype(float)/255)
     in_resized = np.reshape(np.asarray(in_resized), (100,1,50,50))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
@@ -226,7 +230,7 @@ class mcdnn(nn.Module):
     in_resized = []
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
-      in_resized.append(imresize(temp,(40,40)).astype(float)/255)
+      in_resized.append(resize(temp,(40,40)).astype(float)/255)
     in_resized = np.reshape(np.asarray(in_resized), (100,1,40,40))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
@@ -242,7 +246,7 @@ class mcdnn(nn.Module):
     in_resized = []
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
-      in_resized.append(imresize(temp,(36,36)).astype(float)/255)
+      in_resized.append(resize(temp,(36,36)).astype(float)/255)
     in_resized = np.reshape(np.asarray(in_resized), (100,1,36,36))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
@@ -255,4 +259,4 @@ class mcdnn(nn.Module):
     n0_out = self.n0fc2(n0_out)
 
     net_result = (n1_out + n2_out + n3_out + n4_out + n5_out + n6_out + n7_out + n8_out + n9_out + n0_out)/10
-    return F.log_softmax(net_result)
+    return F.log_softmax(net_result, dim=1)
