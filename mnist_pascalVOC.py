@@ -18,9 +18,21 @@ BATCH_SIZE = 100
 LEARNING_RATE = 0.001
 
 # # Load the MNIST dataset
-transform = transforms.Compose([transforms.Resize((28, 28)), transforms.ToTensor()])
-train_data = dsets.MNIST(root='MNIST_data/', train=True, transform=transform, download=True)
-test_data = dsets.MNIST(root='MNIST_data/', train=False, transform=transform, download=True)
+# transform = transforms.Compose([transforms.Resize((28, 28)), transforms.ToTensor()])
+# train_data = dsets.MNIST(root='MNIST_data/', train=True, transform=transform, download=True)
+# test_data = dsets.MNIST(root='MNIST_data/', train=False, transform=transform, download=True)
+
+# train_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
+# test_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False)
+
+# Load the PASCAL VOC dataset
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+train_data = dsets.VOCDetection(root='VOCdevkit/', year='2007', image_set='train', transform=transform)
+test_data = dsets.VOCDetection(root='VOCdevkit/', year='2007', image_set='test', transform=transform)
 
 train_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False)
