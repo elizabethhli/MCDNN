@@ -19,8 +19,10 @@ from keras.preprocessing.image import ImageDataGenerator
 
 
 class mcdnn(nn.Module):
-  def __init__(self):
+  def __init__(self, batch_size):
     super(mcdnn,self).__init__()
+
+    self.batch_size = batch_size
 
     # Using the original mnist data
     self.n1c1 = nn.Conv2d(1,20, kernel_size=4,padding=1)
@@ -118,7 +120,7 @@ class mcdnn(nn.Module):
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
       in_resized.append(resize(temp,(20,20)).astype(float)/255)
-    in_resized = np.reshape(np.asarray(in_resized), (100,1,20,20))
+    in_resized = np.reshape(np.asarray(in_resized), (self.batch_size,1,20,20))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
    
     #n2_out = F.relu(F.max_pool2d(self.n2c1(in_resized),2))
@@ -134,7 +136,7 @@ class mcdnn(nn.Module):
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
       in_resized.append(resize(temp,(18,18)).astype(float)/255)
-    in_resized = np.reshape(np.asarray(in_resized), (100,1,18,18))
+    in_resized = np.reshape(np.asarray(in_resized), (self.batch_size,1,18,18))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
     #n3_out = F.relu(F.max_pool2d(self.n3c1(in_resized),2))
@@ -150,7 +152,7 @@ class mcdnn(nn.Module):
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
       in_resized.append(resize(temp,(16,16)).astype(float)/255)
-    in_resized = np.reshape(np.asarray(in_resized), (100,1,16,16))
+    in_resized = np.reshape(np.asarray(in_resized), (self.batch_size,1,16,16))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
     #n4_out = F.relu(F.max_pool2d(self.n4c1(in_resized),2))
@@ -166,7 +168,7 @@ class mcdnn(nn.Module):
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
       in_resized.append(resize(temp,(14,14)).astype(float)/255)
-    in_resized = np.reshape(np.asarray(in_resized), (100,1,14,14))
+    in_resized = np.reshape(np.asarray(in_resized), (self.batch_size,1,14,14))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
     #n5_out = F.relu(F.max_pool2d(self.n5c1(in_resized),2))
@@ -182,7 +184,7 @@ class mcdnn(nn.Module):
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
       in_resized.append(resize(temp,(12,12)).astype(float)/255)
-    in_resized = np.reshape(np.asarray(in_resized), (100,1,12,12))
+    in_resized = np.reshape(np.asarray(in_resized), (self.batch_size,1,12,12))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
     #n6_out = F.relu(F.max_pool2d(self.n6c1(in_resized),2))
@@ -198,7 +200,7 @@ class mcdnn(nn.Module):
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
       in_resized.append(resize(temp,(10,10)).astype(float)/255)
-    in_resized = np.reshape(np.asarray(in_resized), (100,1,10,10))
+    in_resized = np.reshape(np.asarray(in_resized), (self.batch_size,1,10,10))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
     #n7_out = F.relu(F.max_pool2d(self.n7c1(in_resized),2))
@@ -214,7 +216,7 @@ class mcdnn(nn.Module):
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
       in_resized.append(resize(temp,(50,50)).astype(float)/255)
-    in_resized = np.reshape(np.asarray(in_resized), (100,1,50,50))
+    in_resized = np.reshape(np.asarray(in_resized), (self.batch_size,1,50,50))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
     #n8_out = F.relu(F.max_pool2d(self.n8c1(in_resized),2))
@@ -231,7 +233,7 @@ class mcdnn(nn.Module):
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
       in_resized.append(resize(temp,(40,40)).astype(float)/255)
-    in_resized = np.reshape(np.asarray(in_resized), (100,1,40,40))
+    in_resized = np.reshape(np.asarray(in_resized), (self.batch_size,1,40,40))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
     #n9_out = F.relu(F.max_pool2d(self.n9c1(in_resized),2))
@@ -247,7 +249,7 @@ class mcdnn(nn.Module):
     for el in x:
       temp = np.reshape(el.cpu().data.numpy(), (28,28))
       in_resized.append(resize(temp,(36,36)).astype(float)/255)
-    in_resized = np.reshape(np.asarray(in_resized), (100,1,36,36))
+    in_resized = np.reshape(np.asarray(in_resized), (self.batch_size,1,36,36))
     in_resized = Variable(torch.Tensor(in_resized)).cuda()
     
     #n0_out = F.relu(F.max_pool2d(self.n0c1(in_resized),2))

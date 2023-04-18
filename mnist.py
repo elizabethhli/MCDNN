@@ -1,117 +1,168 @@
 import numpy as np
 import torch
 import torch.nn as tnn
+from torch.nn.parallel import DistributedDataParallel as DDP
+import torch.distributed as dist
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
 import torchvision.models as models
 import torch.nn.functional as F
 from torch.autograd import Variable
+from tensorboardX import SummaryWriter
+import os
+import torch.multiprocessing as mp
 
-# import tensorflow as tf
 
 from keras.preprocessing.image import ImageDataGenerator
 
 from mcdnn import mcdnn
 
-EPOCH = 800
-BATCH_SIZE = 100
-LEARNING_RATE = 0.001
+# EPOCH = 200
+# BATCH_SIZE = 800  # Increase the batch size
+# LEARNING_RATE = 0.001
+# GRAD_ACCUM_STEPS = 2  # Gradient accumulation steps
 
-# # Load the MNIST dataset
-transform = transforms.Compose([transforms.Resize((28, 28)), transforms.ToTensor()])
-train_data = dsets.MNIST(root='MNIST_data/', train=True, transform=transform, download=True)
-test_data = dsets.MNIST(root='MNIST_data/', train=False, transform=transform, download=True)
 
-train_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
-test_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False)
+def main(rank, world_size):
+    
+    EPOCH = 10
+    BATCH_SIZE = 50  # Increase the batch size
+    LEARNING_RATE = 0.001
+    GRAD_ACCUM_STEPS = 2  # Gradient accumulation steps
+    log_dir = "./mnist"
+    os.makedirs(log_dir, exist_ok=True)
+    summary_writer = SummaryWriter(log_dir=log_dir)
 
-mymodel = mcdnn()
-mymodel.cuda()
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
 
-cost = tnn.CrossEntropyLoss()
+    # Enable cuDNN benchmark
+    torch.backends.cudnn.benchmark = True
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
 
-for epoch in range(EPOCH):
-    avg_cost = 0
-    add_iter = 0
-    total_batch = len(train_loader)
 
-    LEARNING_RATE = max(0.00003, (LEARNING_RATE * 0.993))
-    print('current learning rate: %f' % LEARNING_RATE)
-    for i, (batch_x, batch_y) in enumerate(train_loader):
-        # batch_x = batch_x.view(BATCH_SIZE, 1, 28, 28)
-        batch_x = batch_x.view(BATCH_SIZE, 3, 224, 224) # Update the input size and channels
-        batch_y = batch_y
+    # Load the MNIST dataset
+    transform = transforms.Compose([transforms.Resize((28, 28)), transforms.ToTensor()])
+    train_data = dsets.MNIST(root='MNIST_data/', train=True, transform=transform, download=True)
+    test_data = dsets.MNIST(root='MNIST_data/', train=False, transform=transform, download=True)
 
-        images = Variable(batch_x).cuda()
-        labels = Variable(batch_y).cuda()
+    train_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=8, pin_memory=True)
+    test_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False, num_workers=8, pin_memory=True)
 
-        optimizer = torch.optim.Adam(mymodel.parameters(), lr=LEARNING_RATE)
-        optimizer.zero_grad()
-        model_output = mymodel.forward(images)
-        loss = cost(model_output, labels)
-        avg_cost += loss.item()
-        loss.backward()
-        optimizer.step()
+    print(len(train_loader), len(test_loader))
+    mymodel = mcdnn(batch_size = BATCH_SIZE)
+    mymodel.cuda()
 
-        # Data augmentation in every 4 steps
-        if ((i+1) % 4 == 0):
-            # ZCA whitening
-            if ((i+1) % 16 == 0) :
-              print('ZCA whitening') 
-              datagen = ImageDataGenerator(zca_whitening=True)
-            # Feature Standardization
-            elif ((i+1) % 12 == 0) :
-              print('Feature Standardization') 
-              datagen = ImageDataGenerator(featurewise_center=True, featurewise_std_normalization=True)
-            # Random Rotation up to 90 degrees
-            elif ((i+1) % 8 == 0) :
-              print('Random Rotation') 
-              datagen = ImageDataGenerator(rotation_range=90)
-            # Random shift
-            else :
-              print('Random Shift') 
-              datagen = ImageDataGenerator(width_shift_range=0.2, height_shift_range=0.2)
+    # Create the DistributedDataParallel model
+    mymodel = DDP(mymodel, device_ids=[rank], output_device=rank)
+    cost = tnn.CrossEntropyLoss()
+
+    # Mixed precision training with automatic mixed precision (AMP)
+    scaler = torch.cuda.amp.GradScaler()
+
+    for epoch in range(EPOCH):
+        avg_cost = 0
+        add_iter = 0
+        total_batch = len(train_loader)
+        print(total_batch)
+        LEARNING_RATE = max(0.00003, (LEARNING_RATE * 0.993))
+        print('current learning rate: %f' % LEARNING_RATE)
+        for i, (batch_x, batch_y) in enumerate(train_loader):
+            batch_x = batch_x.view(BATCH_SIZE, 1, 28, 28)
+            batch_y = batch_y
+
+            images = Variable(batch_x).cuda()
+            labels = Variable(batch_y).cuda()
+
+            optimizer = torch.optim.Adam(mymodel.parameters(), lr=LEARNING_RATE)
+            optimizer.zero_grad()
+
+            # Use mixed precision training
+            with torch.cuda.amp.autocast():
+                model_output = mymodel.forward(images)
+                loss = cost(model_output, labels)
             
-            # batch_x = np.reshape(batch_x, (BATCH_SIZE,28,28,1))
-            batch_x = np.reshape(batch_x, (BATCH_SIZE, 224, 224, 3))  # Update the input size and channels
-            datagen.fit(batch_x)
-            for aug_batch_x in datagen.flow(batch_x, batch_size=BATCH_SIZE):
-              # aug_batch_x = np.reshape(aug_batch_x, (BATCH_SIZE,1,28,28))
-              aug_batch_x = np.reshape(aug_batch_x, (BATCH_SIZE, 3, 224, 224))  # Update the input size and channels
-              images = Variable(torch.Tensor(aug_batch_x)).cuda()
+            # Scale the loss and perform backward
+            scaler.scale(loss).backward()
 
-              optimizer = torch.optim.Adam(mymodel.parameters(), lr=LEARNING_RATE)
-              optimizer.zero_grad()
-              model_output = mymodel.forward(images)
-              loss = cost(model_output, labels)
-              avg_cost += loss.item()
-              # avg_cost += loss.data[0]
-              add_iter += 1
-              loss.backward()
-              optimizer.step()
-              break
-    if ((i+1) % 1 == 0):
-        print('Epoch [%d/%d], Iter[%d/%d] avg Loss. %.4f' %
-              (epoch+1, EPOCH, i+1, total_batch, avg_cost/(add_iter + i + 1)))
+            # Gradient accumulation
+            if (i + 1) % GRAD_ACCUM_STEPS == 0:
+                # Update the weights
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
 
-    test_batch = len(test_loader)
-    accuracy = 0
+            avg_cost += loss.item()
 
-    for i, (test_x, test_y) in enumerate(test_loader):
-        test_x = test_x.view(test_x.size(0), 3, 224, 224)  # Update the input size and channels
-        # test_x = test_x.view(test_x.size(0), 1, 28, 28)
-        test_y = test_y
+            # Data augmentation in every 4 steps
+            if ((i+1) % 4 == 0):
+                # ZCA whitening
+                if ((i+1) % 16 == 0) :
+                    print('ZCA whitening') 
+                    datagen = ImageDataGenerator(zca_whitening=True)
+                # Feature Standardization
+                elif ((i+1) % 12 == 0) :
+                    print('Feature Standardization') 
+                    datagen = ImageDataGenerator(featurewise_center=True, featurewise_std_normalization=True)
+                # Random Rotation up to 90 degrees
+                elif ((i+1) % 8 == 0) :
+                    print('Random Rotation') 
+                    datagen = ImageDataGenerator(rotation_range=90)
+                # Random shift
+                else :
+                    print('Random Shift') 
+                    datagen = ImageDataGenerator(width_shift_range=0.2, height_shift_range=0.2)
+                
+                batch_x = np.reshape(batch_x, (BATCH_SIZE,28,28,1))
+                # batch_x = np.reshape(batch_x, (BATCH_SIZE, 224, 224, 3))  # Update the input size and channels
+                datagen.fit(batch_x)
+                for aug_batch_x in datagen.flow(batch_x, batch_size=BATCH_SIZE):
+                    aug_batch_x = np.reshape(aug_batch_x, (BATCH_SIZE,1,28,28))
+                    # aug_batch_x = np.reshape(aug_batch_x, (BATCH_SIZE, 3, 224, 224))  # Update the input size and channels
+                    images = Variable(torch.Tensor(aug_batch_x)).cuda()
 
-        test_images = Variable(test_x).cuda()
-        test_labels = test_y
+                    optimizer = torch.optim.Adam(mymodel.parameters(), lr=LEARNING_RATE)
+                    optimizer.zero_grad()
+                    model_output = mymodel.forward(images)
+                    loss = cost(model_output, labels)
+                    avg_cost += loss.item()
+                    # avg_cost += loss.data[0]
+                    add_iter += 1
+                    loss.backward()
+                    optimizer.step()
+                    break
+        if ((i+1) % 1 == 0):
+            print('Epoch [%d/%d], Iter[%d/%d] avg Loss. %.4f' %
+                    (epoch+1, EPOCH, i+1, total_batch, avg_cost/(add_iter + i + 1)))
+            step = (BATCH_SIZE * epoch+1) + i+1
+            summary_writer.add_scalar('cls_loss', loss.item(), step)
+            summary_writer.add_scalar('learning rate', optimizer.param_groups[0]['lr'], step)
 
-        test_output = mymodel(test_images)
-        test_output = np.argmax(test_output.cpu().data.numpy(), axis=1)
+        test_batch = len(test_loader)
+        accuracy = 0
 
-        accuracy_temp = float(np.sum(test_labels.numpy() == test_output))
-        accuracy += accuracy_temp
-        if ((i+1) % 10 == 0):
-            print("Epoch [%d/%d], TestBatch [%d/%d] batch acc: %f" %
-                  (epoch+1, EPOCH, i+1, test_batch, (accuracy_temp/100)))
+        for i, (test_x, test_y) in enumerate(test_loader):
+            # test_x = test_x.view(test_x.size(0), 3, 224, 224)  # Update the input size and channels
+            test_x = test_x.view(test_x.size(0), 1, 28, 28)
+            test_y = test_y
 
-    print("Accuracy: %f" % (accuracy/len(test_data)))
+            test_images = Variable(test_x).cuda()
+            test_labels = test_y
+
+            test_output = mymodel(test_images)
+            test_output = np.argmax(test_output.cpu().data.numpy(), axis=1)
+
+            accuracy_temp = float(np.sum(test_labels.numpy() == test_output))
+            accuracy += accuracy_temp
+            if ((i+1) % 10 == 0):
+                print("Epoch [%d/%d], TestBatch [%d/%d] batch acc: %f" %
+                        (epoch+1, EPOCH, i+1, test_batch, (accuracy_temp/BATCH_SIZE)))
+
+        print("Accuracy: %f" % (accuracy/len(test_data)))
+        summary_writer.add_scalar('accuracy', accuracy/len(test_data), global_step=epoch+1)
+
+
+
+if __name__ == '__main__':
+    world_size = torch.cuda.device_count()  # Set world_size to the number of available GPUs
+    mp.spawn(main, args=(world_size,), nprocs=world_size, join=True)
